@@ -27,6 +27,8 @@
 
 namespace fastertransformer {
 
+#ifndef FALLBACKTYPE_DEFINED
+#define FALLBACKTYPE_DEFINED
 // fallback to fp32 dynamic decoder when bf16 specified
 template<typename T>
 struct fallBackType {
@@ -37,6 +39,8 @@ template<>
 struct fallBackType<half> {
     using Type = half;
 };
+
+#endif
 
 template<typename T>
 class BartDecoding: public BaseLayer {
