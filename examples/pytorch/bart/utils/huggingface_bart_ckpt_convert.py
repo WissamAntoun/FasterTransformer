@@ -26,18 +26,18 @@ sys.path.append(dir_path + "/../../../../3rdparty/transformers/src/")
 
 import numpy as np
 import torch  # pytype: disable=import-error
-from transformers import T5EncoderModel, T5ForConditionalGeneration
+from transformers import BartForConditionalGeneration, MBartForConditionalGeneration
 
 LOGGER = logging.getLogger(__name__)
 
 rename_mapping = {
-    "relative_attention_num_buckets": "relative_attention_num_buckets_or_max_pos_seq_len"
+    # "relative_attention_num_buckets": "relative_attention_num_buckets_or_max_pos_seq_len"
 }
 new_configs = {
     "structure": {
-        "t5_with_bias": "false",
-        "use_gated_activation": "false",
-        "position_embedding_type": "relative",
+        "bart_with_bias": "true",  # TODO: this was true for AraBART
+        "use_gated_activation": "false",  # TODO: this was false for AraBART
+        "position_embedding_type": "absolute",
     }
 }
 
@@ -54,16 +54,16 @@ def get_weight_data_type(data_type):
 def fuse_decoder_qkv(model, factor, saved_dir, np_weight_data_type):
     model_dict = {}
     for name, param in model.named_parameters():
-        if name.find("decoder") != -1 and name.find("SelfAttention") != -1:
-            model_dict[name] = param
+        if name.find("decoder") != -1 and name.find("self_attn") != -1:
+            model_dict[name.replace("model.", "")] = param
 
-    for i in range(model.decoder.config.num_layers):
-        shape = model_dict[f"decoder.block.{i}.layer.0.SelfAttention.q.weight"].T.shape
+    for i in range(model.model.decoder.config.decoder_layers):
+        shape = model_dict[f"decoder.layers.{i}.self_attn.q_proj.weight"].T.shape
         qkv = torch.cat(
             [
-                model_dict[f"decoder.block.{i}.layer.0.SelfAttention.q.weight"].T,
-                model_dict[f"decoder.block.{i}.layer.0.SelfAttention.k.weight"].T,
-                model_dict[f"decoder.block.{i}.layer.0.SelfAttention.v.weight"].T,
+                model_dict[f"decoder.layers.{i}.self_attn.q_proj.weight"].T,
+                model_dict[f"decoder.layers.{i}.self_attn.k_proj.weight"].T,
+                model_dict[f"decoder.layers.{i}.self_attn.v_proj.weight"].T,
             ],
             dim=-1,
         )
@@ -74,25 +74,57 @@ def fuse_decoder_qkv(model, factor, saved_dir, np_weight_data_type):
         split_vals = np.split(qkv, factor, axis=-1)
         for j in range(factor):
             saved_path = (
-                saved_dir
-                / f"decoder.block.{i}.layer.0.SelfAttention.qkv.weight.{j}.bin"
+                saved_dir / f"decoder.layers.{i}.self_attn.qkv_proj.weight.{j}.bin"
+            )
+            split_vals[j].tofile(saved_path.as_posix())
+
+        qkv_bias = torch.cat(
+            [
+                model_dict[f"decoder.layers.{i}.self_attn.q_proj.bias"],
+                model_dict[f"decoder.layers.{i}.self_attn.k_proj.bias"],
+                model_dict[f"decoder.layers.{i}.self_attn.v_proj.bias"],
+            ],
+            dim=-1,
+        )
+        qkv_bias = qkv_bias.cpu().detach().numpy().astype(np_weight_data_type)
+        split_vals = np.split(qkv_bias, factor, axis=-1)
+        for j in range(factor):
+            saved_path = (
+                saved_dir / f"decoder.layers.{i}.self_attn.qkv_proj.bias.{j}.bin"
             )
             split_vals[j].tofile(saved_path.as_posix())
 
 
-def split_and_convert_process(key, val, factor, saved_dir):
+def split_and_convert_process(key, val, factor, saved_dir, config):
     if val.ndim == 2:
         val = val.transpose(1, 0)
-    saved_key = key
+    saved_key = key.replace("model.", "")
     LOGGER.debug(f"key: {key}, val.shape: {val.shape}")
 
     if key.find("shared.weight") != -1:
         # shared weights, only need to convert the weights of rank 0
+        # TODO: check for embedding scaling bart/utils/ft_decoding.py#L346
+        embedding_scale = np.sqrt(config.d_model) if config.scale_embedding else 1.0
+        val = val * embedding_scale
         saved_path = saved_dir / f"{saved_key}.bin"
         val.tofile(saved_path.as_posix())
 
         saved_path = saved_dir / f"{saved_key}_T.bin"
         val.T.tofile(saved_path.as_posix())
+    elif key.find("final_logits_bias") != -1:
+        saved_path = saved_dir / f"{saved_key}.bin"
+        val.tofile(saved_path.as_posix())
+
+        saved_path = saved_dir / f"{saved_key}_T.bin"
+        val.T.tofile(saved_path.as_posix())
+    elif key.find("embed_positions.weight") != -1:
+        # remove the first two ids since size is 1024.
+        # Check MBartLearnedPositionalEmbedding in transformers
+        saved_path = saved_dir / f"{saved_key}.bin"
+        val[:, 2:].tofile(saved_path.as_posix())
+
+        saved_path = saved_dir / f"{saved_key}_T.bin"
+        val[:, 2:].T.tofile(saved_path.as_posix())
     elif key.find("lm_head.weight") != -1:
         # lm_head weights, only need to convert the weights of rank 0
         val = val.transpose(
@@ -101,15 +133,23 @@ def split_and_convert_process(key, val, factor, saved_dir):
         saved_path = saved_dir / f"{saved_key}.bin"
         val.tofile(saved_path.as_posix())
 
-    elif key.find("layer_norm.weight") != -1:
+    elif (
+        key.find("layer_norm.weight") != -1
+        or key.find("layer_norm.bias") != -1
+        or key.find("layernorm_embedding.weight") != -1
+        or key.find("layernorm_embedding.bias") != -1
+    ):
         # shared weights, only need to convert the weights of rank 0
         saved_path = saved_dir / f"{saved_key}.bin"
         val.tofile(saved_path.as_posix())
 
     elif (
-        key.find("SelfAttention.o.weight") != -1
-        or key.find("EncDecAttention.o.weight") != -1
-        or key.find("DenseReluDense.wo.weight") != -1
+        key.find("self_attn.out_proj.weight") != -1
+        or key.find("encoder_attn.out_proj.weight") != -1
+        or key.find("self_attn.out_proj.bias") != -1
+        or key.find("encoder_attn.out_proj.bias") != -1
+        or key.find("fc2.weight") != -1
+        or key.find("fc2.bias") != -1
     ):
         split_vals = np.split(val, factor, axis=0)
         for j in range(factor):
@@ -117,45 +157,38 @@ def split_and_convert_process(key, val, factor, saved_dir):
             split_vals[j].tofile(saved_path.as_posix())
 
     elif (
-        key.find("DenseReluDense.wi.weight") != -1
+        key.find("fc1.weight") != -1
+        or key.find("fc1.bias") != -1
         or (
             key.find("encoder") != -1
             and (
-                key.find("SelfAttention.q.weight") != -1
-                or key.find("SelfAttention.k.weight") != -1
-                or key.find("SelfAttention.v.weight") != -1
+                key.find("self_attn.q_proj.weight") != -1
+                or key.find("self_attn.k_proj.weight") != -1
+                or key.find("self_attn.v_proj.weight") != -1
+                or key.find("self_attn.q_proj.bias") != -1
+                or key.find("self_attn.k_proj.bias") != -1
+                or key.find("self_attn.v_proj.bias") != -1
             )
         )
-        or key.find("EncDecAttention.q.weight") != -1
-        or key.find("EncDecAttention.k.weight") != -1
-        or key.find("EncDecAttention.v.weight") != -1
+        or key.find("encoder_attn.q_proj.weight") != -1
+        or key.find("encoder_attn.k_proj.weight") != -1
+        or key.find("encoder_attn.v_proj.weight") != -1
+        or key.find("encoder_attn.q_proj.bias") != -1
+        or key.find("encoder_attn.k_proj.bias") != -1
+        or key.find("encoder_attn.v_proj.bias") != -1
     ):
         split_vals = np.split(val, factor, axis=-1)
         for j in range(factor):
             saved_path = saved_dir / f"{saved_key}.{j:d}.bin"
             split_vals[j].tofile(saved_path.as_posix())
-    elif (
-        key.find("DenseReluDense.wi_0.weight") != -1
-        or key.find("DenseReluDense.wi_1.weight") != -1
-    ):
-        # For gated activation.
-        if key.find("DenseReluDense.wi_0.weight") != -1:
-            saved_key = key.replace("wi_0", "wi")
-        elif key.find("DenseReluDense.wi_1.weight") != -1:
-            saved_key = key.replace("wi_1", "wi2")
-        split_vals = np.split(val, factor, axis=-1)
-        for j in range(factor):
-            saved_path = saved_dir / f"{saved_key}.{j:d}.bin"
-            split_vals[j].tofile(saved_path.as_posix())
-    elif key.find("relative_attention_bias") != -1:
-        split_vals = np.split(val, factor, axis=0)
-        for j in range(factor):
-            saved_path = saved_dir / f"{saved_key}.{j:d}.bin"
-            split_vals[j].tofile(saved_path.as_posix())
+
     elif key.find("decoder") != -1 and (
-        key.find("SelfAttention.q.weight") != -1
-        or key.find("SelfAttention.k.weight") != -1
-        or key.find("SelfAttention.v.weight") != -1
+        key.find("self_attn.q_proj.weight") != -1
+        or key.find("self_attn.k_proj.weight") != -1
+        or key.find("self_attn.v_proj.weight") != -1
+        or key.find("self_attn.q_proj.bias") != -1
+        or key.find("self_attn.k_proj.bias") != -1
+        or key.find("self_attn.v_proj.bias") != -1
     ):
         pass
     elif (
@@ -171,30 +204,27 @@ def convert_checkpoint(args):
     saved_dir = Path(args.saved_dir) / f"{args.inference_tensor_para_size:d}-gpu"
     saved_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.encoder_only:
-        t5_model = T5EncoderModel.from_pretrained(args.in_file)
+    if args.is_mbart:
+        bart_model = MBartForConditionalGeneration.from_pretrained(args.in_file)
     else:
-        t5_model = T5ForConditionalGeneration.from_pretrained(args.in_file)
+        bart_model = BartForConditionalGeneration.from_pretrained(args.in_file)
 
     config = configparser.ConfigParser()
 
-    if t5_model.encoder.config.feed_forward_proj.find("gated") != -1:
-        new_configs["structure"]["use_gated_activation"] = "1"
-
     config["encoder"] = {}
-    for key, val in t5_model.encoder.config.to_dict().items():
+    for key, val in bart_model.model.encoder.config.to_dict().items():
         config["encoder"][key] = f"{val}"
     config["encoder"]["weight_data_type"] = args.weight_data_type
     config["decoder"] = {}
-    if not args.encoder_only:
-        for key, val in t5_model.decoder.config.to_dict().items():
-            config["decoder"][key] = f"{val}"
-        config["decoder"]["weight_data_type"] = args.weight_data_type
+
+    for key, val in bart_model.model.decoder.config.to_dict().items():
+        config["decoder"][key] = f"{val}"
+    config["decoder"]["weight_data_type"] = args.weight_data_type
 
     for key, val in rename_mapping.items():
         config["encoder"][val] = config["encoder"].pop(key)
-        if not args.encoder_only:
-            config["decoder"][val] = config["decoder"].pop(key)
+        config["decoder"][val] = config["decoder"].pop(key)
+
     for key, val in new_configs.items():
         config[key] = {}
         for val_key, val_val in val.items():
@@ -215,23 +245,23 @@ def convert_checkpoint(args):
     #             i_gpu_num,
     #             saved_dir,
     #         )
-    #         for name, param in t5_model.state_dict().items()
+    #         for name, param in bart_model.state_dict().items()
     #     ],
     # )
 
     # pool.close()
     # pool.join()
 
-    for name, param in t5_model.state_dict().items():
+    for name, param in bart_model.state_dict().items():
         split_and_convert_process(
             name,
             param.cpu().detach().numpy().astype(np_weight_data_type),
             i_gpu_num,
             saved_dir,
+            bart_model.model.config,
         )
 
-    if not args.encoder_only:
-        fuse_decoder_qkv(t5_model, i_gpu_num, saved_dir, np_weight_data_type)
+    fuse_decoder_qkv(bart_model, i_gpu_num, saved_dir, np_weight_data_type)
 
 
 if __name__ == "__main__":
@@ -263,7 +293,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "-weight_data_type", type=str, default="fp32", choices=["fp32", "fp16"]
     )
-    parser.add_argument("--encoder_only", "-e", action="store_true")
+    parser.add_argument(
+        "--is_mbart", action="store_true", help="Whether the model is mbart"
+    )
     parser.add_argument(
         "--verbose", action="store_true", help="Provide verbose messages"
     )

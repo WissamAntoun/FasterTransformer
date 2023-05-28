@@ -255,9 +255,71 @@ template<typename T>
 void BartDecodingWeight<T>::loadModel(std::string dir_path)
 {
     FT_LOG_DEBUG("BartDecodingWeight " + std::string(__func__) + " start");
+    FT_CHECK(is_maintain_buffer_ == true);
+    FtCudaDataType model_file_type = getModelFileType(dir_path + "/config.ini", "decoder");
 
-    FT_LOG_DEBUG(
-        "Currently only support checkpoint loading from PyTorch interface outside FT. Direct checkpoint .bin loading support TBD");
+    if (position_embedding_type == PositionEmbeddingType::absolute) {
+        loadWeightFromBin<T>(weights_ptr[0],
+                             {(size_t)weights_size[0]},
+                             dir_path + "/decoder.embed_positions.weight.bin",
+                             model_file_type);
+    }
+    else {
+        // Not supported yet
+        FT_LOG_ERROR("Relative position embedding is not supported yet");
+        FT_CHECK(false);
+    }
+    loadWeightFromBin<T>(weights_ptr[1], {(size_t)weights_size[1]}, dir_path + "/shared.weight_T.bin", model_file_type);
+    loadWeightFromBin<T>(weights_ptr[2], {(size_t)weights_size[2]}, dir_path + "/shared.weight.bin", model_file_type);
+    loadWeightFromBin<T>(weights_ptr[3],
+                         {(size_t)weights_size[3]},
+                         dir_path + "/decoder.layernorm_embedding.weight.bin",
+                         model_file_type);
+
+    if (mbart || bart_with_bias) {
+        if (mbart && bart_with_bias) {
+            // post_decoder_layernorm.gamma = weights_ptr[4];
+            // pre_decoder_layernorm.beta   = weights_ptr[5];
+            // post_decoder_layernorm.beta  = weights_ptr[6];
+            // post_decoder_embedding.bias  = weights_ptr[7];
+            loadWeightFromBin<T>(weights_ptr[4],
+                                 {(size_t)weights_size[4]},
+                                 dir_path + "/decoder.layer_norm.weight.bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[5],
+                                 {(size_t)weights_size[5]},
+                                 dir_path + "/decoder.layernorm_embedding.bias.bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr[6], {(size_t)weights_size[6]}, dir_path + "/decoder.layer_norm.bias.bin", model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr[7], {(size_t)weights_size[7]}, dir_path + "/final_logit_bias.bin", model_file_type);
+        }
+        else if (mbart && !bart_with_bias) {
+            // post_decoder_layernorm.gamma = weights_ptr[4];
+            loadWeightFromBin<T>(weights_ptr[4],
+                                 {(size_t)weights_size[4]},
+                                 dir_path + "/decoder.layer_norm.weight.bin",
+                                 model_file_type);
+        }
+        else if (!mbart && bart_with_bias) {
+            // pre_decoder_layernorm.beta  = weights_ptr[4];
+            // post_decoder_embedding.bias = weights_ptr[5];
+            loadWeightFromBin<T>(weights_ptr[4],
+                                 {(size_t)weights_size[4]},
+                                 dir_path + "/decoder.layernorm_embedding.bias.bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr[5], {(size_t)weights_size[5]}, dir_path + "/final_logit_bias.bin", model_file_type);
+        }
+    }
+
+    for (int l = 0; l < num_layer_; l++) {
+        if (isValidLayerParallelId(l)) {
+            decoder_layer_weights[l]->loadModel(dir_path + "/decoder.layers." + std::to_string(l) + ".",
+                                                model_file_type);
+        }
+    }
 
     FT_LOG_DEBUG("BartDecodingWeight " + std::string(__func__) + " end");
 }

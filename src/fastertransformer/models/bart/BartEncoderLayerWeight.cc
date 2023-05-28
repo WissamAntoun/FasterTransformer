@@ -57,10 +57,10 @@ void BartEncoderLayerWeight<T>::initialize()
     weights_size_[3] = (head_num_ / tensor_para_size_) * size_per_head_ * d_model_;  // O weight
     weights_size_[4] = d_model_;                                                     // LN1 weight
     if (use_gated_activation_) {
-        weights_size_[5] = d_model_ * (inter_size_ / tensor_para_size_);  // FC1 weight
-        weights_size_[6] = d_model_ * (inter_size_ / tensor_para_size_);  // for gated activation weight
-        weights_size_[7] = (inter_size_ / tensor_para_size_) * d_model_;  // FC2 weight
-        weights_size_[8] = d_model_;                                      // LN2 weight
+        weights_size_[5] = d_model_ * (inter_size_ / tensor_para_size_);             // FC1 weight
+        weights_size_[6] = d_model_ * (inter_size_ / tensor_para_size_);             // for gated activation weight
+        weights_size_[7] = (inter_size_ / tensor_para_size_) * d_model_;             // FC2 weight
+        weights_size_[8] = d_model_;                                                 // LN2 weight
     }
     else {
         weights_size_[5] = d_model_ * (inter_size_ / tensor_para_size_);  // FC1 weight
@@ -293,7 +293,91 @@ void BartEncoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
 {
     FT_LOG_DEBUG("BartEncoderLayerWeight " + std::string(__func__) + " start");
 
-    FT_LOG_DEBUG("Megatron BART support TBD");
+    FT_CHECK(is_maintain_buffer_);
+
+    const auto tp_rank = std::to_string(tensor_para_rank_);
+    loadWeightFromBin<T>(
+        weights_ptr_[0], {weights_size_[0]}, dir_path + "self_attn.q_proj.weight." + tp_rank + ".bin", model_file_type);
+    loadWeightFromBin<T>(
+        weights_ptr_[1], {weights_size_[1]}, dir_path + "self_attn.k_proj.weight." + tp_rank + ".bin", model_file_type);
+    loadWeightFromBin<T>(
+        weights_ptr_[2], {weights_size_[2]}, dir_path + "self_attn.v_proj.weight." + tp_rank + ".bin", model_file_type);
+    loadWeightFromBin<T>(weights_ptr_[3],
+                         {weights_size_[3]},
+                         dir_path + "self_attn.out_proj.weight." + tp_rank + ".bin",
+                         model_file_type);
+    loadWeightFromBin<T>(weights_ptr_[4],
+                         {weights_size_[4]},
+                         dir_path + "self_attn_layer_norm.weight." + tp_rank + ".bin",
+                         model_file_type);
+
+    loadWeightFromBin<T>(
+        weights_ptr_[5], {weights_size_[5]}, dir_path + "fc1.weight." + tp_rank + ".bin", model_file_type);
+
+    const int gated_activation_weight_offset = use_gated_activation_ ? 1 : 0;
+    if (use_gated_activation_) {  // won't used in BART afaik
+
+        loadWeightFromBin<T>(
+            weights_ptr_[6], {weights_size_[6]}, dir_path + "gated_act.weight." + tp_rank + ".bin", model_file_type);
+    }
+
+    loadWeightFromBin<T>(weights_ptr_[6 + gated_activation_weight_offset],
+                         {weights_size_[6]},
+                         dir_path + "fc2.weight." + tp_rank + ".bin",
+                         model_file_type);
+    loadWeightFromBin<T>(weights_ptr_[7 + gated_activation_weight_offset],
+                         {weights_size_[7]},
+                         dir_path + "final_layer_norm.weight." + tp_rank + ".bin",
+                         model_file_type);
+
+    if (bart_with_bias_) {
+        loadWeightFromBin<T>(weights_ptr_[8 + gated_activation_weight_offset],
+                             {weights_size_[8]},
+                             dir_path + "self_attn.q_proj.bias." + tp_rank + ".bin",
+                             model_file_type);
+        loadWeightFromBin<T>(weights_ptr_[9 + gated_activation_weight_offset],
+                             {weights_size_[9]},
+                             dir_path + "self_attn.k_proj.bias." + tp_rank + ".bin",
+                             model_file_type);
+        loadWeightFromBin<T>(weights_ptr_[10 + gated_activation_weight_offset],
+                             {weights_size_[10]},
+                             dir_path + "self_attn.v_proj.bias." + tp_rank + ".bin",
+                             model_file_type);
+        loadWeightFromBin<T>(weights_ptr_[11 + gated_activation_weight_offset],
+                             {weights_size_[11]},
+                             dir_path + "self_attn.out_proj.bias." + tp_rank + ".bin",
+                             model_file_type);
+        loadWeightFromBin<T>(weights_ptr_[12 + gated_activation_weight_offset],
+                             {weights_size_[12]},
+                             dir_path + "self_attn_layer_norm.bias." + tp_rank + ".bin",
+                             model_file_type);
+        loadWeightFromBin<T>(weights_ptr_[13 + gated_activation_weight_offset],
+                             {weights_size_[13]},
+                             dir_path + "fc1.bias." + tp_rank + ".bin",
+                             model_file_type);
+        if (use_gated_activation_) {
+            loadWeightFromBin<T>(weights_ptr_[15],
+                                 {weights_size_[15]},
+                                 dir_path + "gated_act.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr_[16], {weights_size_[16]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
+            loadWeightFromBin<T>(weights_ptr_[17],
+                                 {weights_size_[17]},
+                                 dir_path + "final_layer_norm.bias." + tp_rank + ".bin",
+                                 model_file_type);
+        }
+        else {
+            loadWeightFromBin<T>(weights_ptr_[14 + gated_activation_weight_offset],
+                                 {weights_size_[14]},
+                                 dir_path + "fc2.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr_[15 + gated_activation_weight_offset],
+                                 {weights_size_[15]},
+                                 dir_path + "final_layer_norm.bias." + tp_rank + ".bin",
+                                 model_file_type);
+        }
+    }
 
     FT_LOG_DEBUG("BartEncoderLayerWeight " + std::string(__func__) + " end");
 }
