@@ -25,18 +25,18 @@
 namespace ft = fastertransformer;
 
 template<typename T>
-struct T5TritonModelInstance: AbstractTransformerModelInstance {
+struct BartTritonModelInstance: AbstractTransformerModelInstance {
 
-    T5TritonModelInstance(std::unique_ptr<ft::BartEncoder<T>>                     Bart_encoder,
-                          std::unique_ptr<ft::BartDecoding<T>>                    Bart_decoding,
-                          std::shared_ptr<ft::BartEncoderWeight<T>>               Bart_encoder_weight,
-                          std::shared_ptr<ft::BartDecodingWeight<T>>              Bart_decoding_weight,
-                          std::unique_ptr<ft::Allocator<ft::AllocatorType::CUDA>> allocator,
-                          std::unique_ptr<ft::cublasAlgoMap>                      cublas_algo_map,
-                          std::unique_ptr<std::mutex>                             cublas_wrapper_mutex,
-                          std::unique_ptr<ft::cublasMMWrapper>                    cublas_wrapper,
-                          std::unique_ptr<cudaDeviceProp>                         cuda_device_prop_ptr);
-    ~T5TritonModelInstance();
+    BartTritonModelInstance(std::unique_ptr<ft::BartEncoder<T>>                     Bart_encoder,
+                            std::unique_ptr<ft::BartDecoding<T>>                    Bart_decoding,
+                            std::shared_ptr<ft::BartEncoderWeight<T>>               Bart_encoder_weight,
+                            std::shared_ptr<ft::BartDecodingWeight<T>>              Bart_decoding_weight,
+                            std::unique_ptr<ft::Allocator<ft::AllocatorType::CUDA>> allocator,
+                            std::unique_ptr<ft::cublasAlgoMap>                      cublas_algo_map,
+                            std::unique_ptr<std::mutex>                             cublas_wrapper_mutex,
+                            std::unique_ptr<ft::cublasMMWrapper>                    cublas_wrapper,
+                            std::unique_ptr<cudaDeviceProp>                         cuda_device_prop_ptr);
+    ~BartTritonModelInstance();
 
     std::shared_ptr<std::vector<triton::Tensor>>
     forward(std::shared_ptr<std::vector<triton::Tensor>> input_tensors) override
