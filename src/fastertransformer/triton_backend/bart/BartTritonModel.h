@@ -27,7 +27,7 @@
 namespace ft = fastertransformer;
 
 template<typename T>
-struct BartTritonModel: public AbstractTransformerModel {
+struct BartTritonModel: public AAbstractTransformerModel {
     BartTritonModel(INIReader reader, std::string model_dir);
 
     BartTritonModel(size_t      tensor_para_size,
