@@ -287,6 +287,7 @@ struct AbstractTransformerModelInstance {
 };
 
 struct AbstractTransformerModel {
+    static std::shared_ptr<AbstractTransformerModel> createBartModel(std::string model_dir);
     static std::shared_ptr<AbstractTransformerModel> createGptModel(std::string inifile);
     static std::shared_ptr<AbstractTransformerModel> createGptFP8Model(std::string inifile);
     static std::shared_ptr<AbstractTransformerModel> createGptJModel(std::string inifile);
