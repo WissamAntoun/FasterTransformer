@@ -335,7 +335,8 @@ BartDecoding<T>::~BartDecoding()
     freeBuffer();
 }
 
-Template<typename T> void BartDecoding<T>::setOutputTensors(TensorMap* output_tensors, TensorMap* input_tensors)
+template<typename T>
+void BartDecoding<T>::setOutputTensors(TensorMap* output_tensors, TensorMap const* input_tensors)
 {
     if (pipeline_para_.rank_ != pipeline_para_.world_size_ - 1) {
         return;
@@ -439,7 +440,7 @@ Template<typename T> void BartDecoding<T>::setOutputTensors(TensorMap* output_te
 }
 
 template<typename T>
-void BartDecoding<T>::sendTensorsToFirstPipelineNode(TensorMap* output_tensors, TensorMap* input_tensors)
+void BartDecoding<T>::sendTensorsToFirstPipelineNode(TensorMap* output_tensors, TensorMap const* input_tensors)
 {
     if (pipeline_para_.world_size_ == 1) {
         // throw errors when detected
