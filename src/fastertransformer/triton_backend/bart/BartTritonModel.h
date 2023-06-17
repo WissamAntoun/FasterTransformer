@@ -90,7 +90,8 @@ private:
 
     // Bart structure difference
     bool                      mbart_;
-    bool                      Bart_with_bias_;
+    bool                      bart_with_bias_;
+    bool                      use_gated_activation_;
     ft::PositionEmbeddingType position_embedding_type_;
     ft::ActivationType        activation_type_;
 

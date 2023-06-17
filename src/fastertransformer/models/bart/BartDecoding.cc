@@ -281,6 +281,20 @@ BartDecoding<T>::BartDecoding(size_t                              max_batch_size
 }
 
 template<typename T>
+void BartDecoding<T>::registerCallback(callback_sig* fn, void* ctx)
+{
+    token_generated_cb_  = fn;
+    token_generated_ctx_ = ctx;
+}
+
+template<typename T>
+void BartDecoding<T>::unRegisterCallback()
+{
+    token_generated_cb_  = nullptr;
+    token_generated_ctx_ = nullptr;
+}
+
+template<typename T>
 BartDecoding<T>::BartDecoding(BartDecoding<T> const& decoding):
     BaseLayer(decoding),
     head_num_(decoding.head_num_),
@@ -319,6 +333,184 @@ BartDecoding<T>::~BartDecoding()
     delete decoder_;
     delete dynamic_decode_layer_;
     freeBuffer();
+}
+
+Template<typename T> void BartDecoding<T>::setOutputTensors(TensorMap* output_tensors, TensorMap* input_tensors)
+{
+    if (pipeline_para_.rank_ != pipeline_para_.world_size_ - 1) {
+        return;
+    }
+
+    auto const batch_size       = output_tensors->at("output_ids").shape[0];
+    auto const beam_width       = output_tensors->at("output_ids").shape[1];
+    auto const sequence_lengths = output_tensors->at("sequence_length").getPtr<int>();
+    auto const max_seq_len      = output_tensors->at("output_ids").shape[2];
+
+    if (beam_width > 1) {
+        if (using_beam_hyps) {
+            beam_hyps_.sequence_lengths_src = sequence_lengths;
+            beam_hyps_.parent_ids_src       = parent_ids_buf_;
+            beam_hyps_.output_ids_src       = output_ids_buf_;
+            beam_hyps_.log_probs_src        = output_log_probs_buf_;
+            beam_hyps_.max_seq_len          = max_seq_len;
+            beam_hyps_.length_penalty =
+                input_tensors->isExist("len_penalty") ? input_tensors->at("len_penalty").getVal<float>() : 0.0f;
+
+            invokeInsertUnfinishedPath(beam_hyps_, finished_buf_, cum_log_probs_, batch_size, beam_width, stream_);
+            sync_check_cuda_error();
+
+            invokeFinalize(output_tensors->at("output_ids").getPtr<int>(),
+                           output_tensors->at("sequence_length").getPtr<int>(),
+                           output_tensors->getPtr<float>("cum_log_probs", nullptr),
+                           output_tensors->getPtr<float>("output_log_probs", nullptr),
+                           beam_hyps_.output_ids_tgt,
+                           beam_hyps_.sequence_lengths_tgt,
+                           beam_hyps_.normed_scores,
+                           beam_hyps_.cum_log_probs,
+                           beam_hyps_.log_probs,
+                           beam_hyps_.num_beams,
+                           beam_width,
+                           max_seq_len,
+                           batch_size,
+                           stream_);
+            sync_check_cuda_error();
+        }
+        else {
+            // For beam search, do gather_tree
+            invokeGatherTree(output_ids_transpose_buf_,
+                             output_tensors->at("sequence_length").getPtr<int>(),
+                             max_seq_len,
+                             batch_size,
+                             beam_width,
+                             output_ids_buf_ + batch_size * beam_width,
+                             parent_ids_buf_ + batch_size * beam_width,
+                             end_ids_buf_,
+                             stream_);
+
+            // transpose and take output_parent_ids as inter buffer
+            invokeTransposeAxis01(output_tensors->at("output_ids").getPtr<int>(),
+                                  output_ids_transpose_buf_,
+                                  max_seq_len,
+                                  batch_size * beam_width,
+                                  1,
+                                  stream_);
+        }
+    }
+    else {
+        // For sampling, only transpose the results to output_tensor
+        invokeTransposeAxis01(output_tensors->at("output_ids").getPtr<int>(),
+                              output_ids_buf_ + batch_size * beam_width,
+                              max_seq_len,
+                              batch_size * beam_width,
+                              1,
+                              stream_);
+    }
+    if (output_tensors->isExist("output_log_probs")) {
+        invokeTransposeAxis01(output_tensors->at("output_log_probs").getPtr<float>(),
+                              output_log_probs_buf_,
+                              max_seq_len,
+                              batch_size * beam_width,
+                              1,
+                              stream_);
+    }
+
+    // Return the cumulative log probability and log probability if requested.
+    if (beam_width == 1 || !using_beam_hyps) {
+        if (output_tensors->isExist("output_log_probs")) {
+            invokeTransposeAxis01(output_tensors->at("output_log_probs").getPtr<float>(),
+                                  output_log_probs_buf_,
+                                  max_seq_len,
+                                  batch_size * beam_width,
+                                  1,
+                                  stream_);
+        }
+        if (output_tensors->isExist("cum_log_probs")) {
+            Tensor cum_log_probs = output_tensors->at("cum_log_probs");
+            FT_CHECK_WITH_INFO(cum_log_probs.size() == batch_size * beam_width,
+                               "The shape of cum_log_probs does not match with batch_size x beam_width.");
+            cudaD2Dcpy(cum_log_probs.getPtr<float>(), cum_log_probs_, batch_size * beam_width);
+        }
+    }
+
+    if (output_tensors->isExist("is_finished")) {
+        cudaD2Dcpy(
+            output_tensors->at("is_finished").getPtr<bool>(), finished_buf_, output_tensors->at("is_finished").size());
+    }
+}
+
+template<typename T>
+void BartDecoding<T>::sendTensorsToFirstPipelineNode(TensorMap* output_tensors, TensorMap* input_tensors)
+{
+    if (pipeline_para_.world_size_ == 1) {
+        // throw errors when detected
+        ftNcclStreamSynchronize(tensor_para_, pipeline_para_, stream_);
+        return;
+    }
+
+    auto const batch_size  = output_tensors->at("output_ids").shape[0];
+    auto const beam_width  = output_tensors->at("output_ids").shape[1];
+    auto const max_seq_len = output_tensors->at("output_ids").shape[2];
+
+    ftNcclGroupStart();
+    if (pipeline_para_.rank_ == pipeline_para_.world_size_ - 1) {
+        ftNcclSend(output_tensors->at("output_ids").getPtr<int>(),
+                   batch_size * beam_width * max_seq_len,
+                   0,
+                   pipeline_para_,
+                   stream_);
+
+        ftNcclSend(
+            output_tensors->at("sequence_length").getPtr<int>(), batch_size * beam_width, 0, pipeline_para_, stream_);
+
+        if (output_tensors->isExist("cum_log_probs") && output_tensors->at("cum_log_probs").data != nullptr) {
+            ftNcclSend(output_tensors->at("cum_log_probs").getPtr<float>(),
+                       batch_size * beam_width,
+                       0,
+                       pipeline_para_,
+                       stream_);
+        }
+
+        if (output_tensors->isExist("output_log_probs") && output_tensors->at("output_log_probs").data != nullptr) {
+            ftNcclSend(output_tensors->at("output_log_probs").getPtr<float>(),
+                       batch_size * beam_width * max_seq_len,
+                       0,
+                       pipeline_para_,
+                       stream_);
+        }
+    }
+    else if (pipeline_para_.rank_ == 0) {
+        ftNcclRecv(output_tensors->at("output_ids").getPtr<int>(),
+                   batch_size * beam_width * max_seq_len,
+                   pipeline_para_.world_size_ - 1,
+                   pipeline_para_,
+                   stream_);
+
+        ftNcclRecv(output_tensors->at("sequence_length").getPtr<int>(),
+                   batch_size * beam_width,
+                   pipeline_para_.world_size_ - 1,
+                   pipeline_para_,
+                   stream_);
+
+        if (output_tensors->isExist("cum_log_probs") && output_tensors->at("cum_log_probs").data != nullptr) {
+            ftNcclRecv(output_tensors->at("cum_log_probs").getPtr<float>(),
+                       batch_size * beam_width,
+                       pipeline_para_.world_size_ - 1,
+                       pipeline_para_,
+                       stream_);
+        }
+
+        if (output_tensors->isExist("output_log_probs") && output_tensors->at("output_log_probs").data != nullptr) {
+            ftNcclRecv(output_tensors->at("output_log_probs").getPtr<float>(),
+                       batch_size * beam_width * max_seq_len,
+                       pipeline_para_.world_size_ - 1,
+                       pipeline_para_,
+                       stream_);
+        }
+    }
+    ftNcclGroupEnd();
+
+    // throw errors when detected
+    ftNcclStreamSynchronize(tensor_para_, pipeline_para_, stream_);
 }
 
 template<typename T>
@@ -602,7 +794,7 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                                               CUBLAS_OP_N,
                                               vocab_size_padded_,  // n
                                               local_batch_size * beam_width,
-                                              d_model_,  // k
+                                              d_model_,            // k
                                               &alpha,
                                               padded_embedding_kernel_ptr_,
                                               gemm_data_type,
@@ -622,11 +814,11 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                                               CUBLAS_OP_N,
                                               vocab_size_padded_,  // n
                                               local_batch_size * beam_width,
-                                              d_model_,  // k
+                                              d_model_,            // k
                                               padded_embedding_kernel_ptr_,
-                                              d_model_,  // k
+                                              d_model_,            // k
                                               decoder_output_buf_tmp + d_model_offset,
-                                              d_model_,  // k
+                                              d_model_,            // k
                                               logits_buf_ + vocab_size_units_offset,
                                               vocab_size_padded_ /* n */,
                                               alpha,
@@ -648,7 +840,7 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                             CUBLAS_OP_N,
                             local_vocab_size,  // n
                             local_batch_size * beam_width,
-                            d_model_,  // k
+                            d_model_,          // k
                             &alpha,
                             padded_embedding_kernel_ptr_ + tensor_para_.rank_ * local_vocab_size * d_model_,
                             gemm_data_type,
@@ -670,11 +862,11 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                             CUBLAS_OP_N,
                             local_vocab_size,  // n
                             local_batch_size * beam_width,
-                            d_model_,  // k
+                            d_model_,          // k
                             padded_embedding_kernel_ptr_ + tensor_para_.rank_ * local_vocab_size * d_model_,
-                            d_model_,  // k
+                            d_model_,          // k
                             decoder_output_buf_tmp + d_model_offset,
-                            d_model_,  // k
+                            d_model_,          // k
                             nccl_logits_buf_ + vocab_size_units_offset
                                 + tensor_para_.rank_ * local_batch_size * beam_width * local_vocab_size,
                             local_vocab_size /* n */,
@@ -820,161 +1012,17 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
         if (sum == batch_size * beam_width) {
             break;
         }
-    }
-
-    if (pipeline_para_.rank_ == pipeline_para_.world_size_ - 1) {
-        if (beam_width > 1) {
-            if (using_beam_hyps) {
-                beam_hyps_.sequence_lengths_src = sequence_lengths;
-                beam_hyps_.parent_ids_src       = parent_ids_buf_;
-                beam_hyps_.output_ids_src       = output_ids_buf_;
-                beam_hyps_.log_probs_src        = output_log_probs_buf_;
-                beam_hyps_.max_seq_len          = max_seq_len;
-                beam_hyps_.length_penalty =
-                    input_tensors->isExist("len_penalty") ? input_tensors->at("len_penalty").getVal<float>() : 0.0f;
-
-                invokeInsertUnfinishedPath(beam_hyps_, finished_buf_, cum_log_probs_, batch_size, beam_width, stream_);
-                sync_check_cuda_error();
-
-                invokeFinalize(output_tensors->at("output_ids").getPtr<int>(),
-                               output_tensors->at("sequence_length").getPtr<int>(),
-                               output_tensors->getPtr<float>("cum_log_probs", nullptr),
-                               output_tensors->getPtr<float>("output_log_probs", nullptr),
-                               beam_hyps_.output_ids_tgt,
-                               beam_hyps_.sequence_lengths_tgt,
-                               beam_hyps_.normed_scores,
-                               beam_hyps_.cum_log_probs,
-                               beam_hyps_.log_probs,
-                               beam_hyps_.num_beams,
-                               beam_width,
-                               max_seq_len,
-                               batch_size,
-                               stream_);
-                sync_check_cuda_error();
-            }
-            else {
-                // For beam search, do gather_tree
-                invokeGatherTree(output_ids_transpose_buf_,
-                                 output_tensors->at("sequence_length").getPtr<int>(),
-                                 max_seq_len,
-                                 batch_size,
-                                 beam_width,
-                                 output_ids_buf_ + batch_size * beam_width,
-                                 parent_ids_buf_ + batch_size * beam_width,
-                                 end_ids_buf_,
-                                 stream_);
-
-                // transpose and take output_parent_ids as inter buffer
-                invokeTransposeAxis01(output_tensors->at("output_ids").getPtr<int>(),
-                                      output_ids_transpose_buf_,
-                                      max_seq_len,
-                                      batch_size * beam_width,
-                                      1,
-                                      stream_);
-            }
-        }
-        else {
-            // For sampling, only transpose the results to output_tensor
-            invokeTransposeAxis01(output_tensors->at("output_ids").getPtr<int>(),
-                                  output_ids_buf_ + batch_size * beam_width,
-                                  max_seq_len,
-                                  batch_size * beam_width,
-                                  1,
-                                  stream_);
-        }
-        if (output_tensors->isExist("output_log_probs")) {
-            invokeTransposeAxis01(output_tensors->at("output_log_probs").getPtr<float>(),
-                                  output_log_probs_buf_,
-                                  max_seq_len,
-                                  batch_size * beam_width,
-                                  1,
-                                  stream_);
-        }
-
-        // Return the cumulative log probability and log probability if requested.
-        if (!using_beam_hyps) {
-            if (output_tensors->isExist("output_log_probs")) {
-                invokeTransposeAxis01(output_tensors->at("output_log_probs").getPtr<float>(),
-                                      output_log_probs_buf_,
-                                      max_seq_len,
-                                      batch_size * beam_width,
-                                      1,
-                                      stream_);
-            }
-            if (output_tensors->isExist("cum_log_probs")) {
-                Tensor cum_log_probs = output_tensors->at("cum_log_probs");
-                FT_CHECK_WITH_INFO(cum_log_probs.size() == batch_size * beam_width,
-                                   "The shape of cum_log_probs does not match with batch_size x beam_width.");
-                cudaD2Dcpy(cum_log_probs.getPtr<float>(), cum_log_probs_, batch_size * beam_width);
+        else if (step < (int)max_seq_len && token_generated_cb_) {
+            setOutputTensors(output_tensors, input_tensors);
+            sendTensorsToFirstPipelineNode(output_tensors, input_tensors);
+            if (pipeline_para_.rank_ == 0 && tensor_para_.rank_ == 0) {
+                token_generated_cb_(output_tensors, token_generated_ctx_);
             }
         }
     }
 
-    if (pipeline_para_.world_size_ > 1) {
-        ftNcclGroupStart();
-        if (pipeline_para_.rank_ == pipeline_para_.world_size_ - 1) {
-            ftNcclSend(output_tensors->at("output_ids").getPtr<int>(),
-                       batch_size * beam_width * max_seq_len,
-                       0,
-                       pipeline_para_,
-                       stream_);
-
-            ftNcclSend(output_tensors->at("sequence_length").getPtr<int>(),
-                       batch_size * beam_width,
-                       0,
-                       pipeline_para_,
-                       stream_);
-
-            if (output_tensors->isExist("cum_log_probs") && output_tensors->at("cum_log_probs").data != nullptr) {
-                ftNcclSend(output_tensors->at("cum_log_probs").getPtr<float>(),
-                           batch_size * beam_width,
-                           0,
-                           pipeline_para_,
-                           stream_);
-            }
-
-            if (output_tensors->isExist("output_log_probs") && output_tensors->at("output_log_probs").data != nullptr) {
-                ftNcclSend(output_tensors->at("output_log_probs").getPtr<float>(),
-                           batch_size * beam_width * max_seq_len,
-                           0,
-                           pipeline_para_,
-                           stream_);
-            }
-        }
-        else if (pipeline_para_.rank_ == 0) {
-            ftNcclRecv(output_tensors->at("output_ids").getPtr<int>(),
-                       batch_size * beam_width * max_seq_len,
-                       pipeline_para_.world_size_ - 1,
-                       pipeline_para_,
-                       stream_);
-
-            ftNcclRecv(output_tensors->at("sequence_length").getPtr<int>(),
-                       batch_size * beam_width,
-                       pipeline_para_.world_size_ - 1,
-                       pipeline_para_,
-                       stream_);
-
-            if (output_tensors->isExist("cum_log_probs") && output_tensors->at("cum_log_probs").data != nullptr) {
-                ftNcclRecv(output_tensors->at("cum_log_probs").getPtr<float>(),
-                           batch_size * beam_width,
-                           pipeline_para_.world_size_ - 1,
-                           pipeline_para_,
-                           stream_);
-            }
-
-            if (output_tensors->isExist("output_log_probs") && output_tensors->at("output_log_probs").data != nullptr) {
-                ftNcclRecv(output_tensors->at("output_log_probs").getPtr<float>(),
-                           batch_size * beam_width * max_seq_len,
-                           pipeline_para_.world_size_ - 1,
-                           pipeline_para_,
-                           stream_);
-            }
-        }
-        ftNcclGroupEnd();
-    }
-
-    // throw errors when detected
-    ftNcclStreamSynchronize(tensor_para_, pipeline_para_, stream_);
+    setOutputTensors(output_tensors, input_tensors);
+    sendTensorsToFirstPipelineNode(output_tensors, input_tensors);
 
     if (is_free_buffer_after_forward_) {
         freeBuffer();

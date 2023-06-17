@@ -132,6 +132,11 @@ protected:
     const bool     using_beam_hyps = true;
     BeamHypotheses beam_hyps_;
 
+    // function pointer callback
+    using callback_sig                 = void(TensorMap*, void*);
+    callback_sig* token_generated_cb_  = nullptr;
+    void*         token_generated_ctx_ = nullptr;
+
 public:
     BartDecoding(size_t                              max_batch_size,
                  size_t                              max_seq_len,
@@ -174,6 +179,9 @@ public:
     void forward(TensorMap* output_tensors, TensorMap* input_tensors, const BartDecodingWeight<T>* Decoding_weights);
 
     void setStream(cudaStream_t stream) override;
+
+    void registerCallback(callback_sig* fn, void* ctx);
+    void unRegisterCallback();
 };
 
 }  // namespace fastertransformer

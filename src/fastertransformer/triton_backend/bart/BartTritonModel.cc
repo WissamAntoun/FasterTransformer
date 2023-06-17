@@ -74,7 +74,7 @@ BartTritonModel<T>::BartTritonModel(INIReader reader, std::string model_dir): mo
     tensor_para_size_         = reader.GetInteger("ft_instance_hyperparameter", "tensor_para_size");
     pipeline_para_size_       = reader.GetInteger("ft_instance_hyperparameter", "pipeline_para_size");
     enable_custom_all_reduce_ = reader.GetInteger("ft_instance_hyperparameter", "enable_custom_all_reduce", 0);
-    mbart_                    = reader.GetBoolean("encoder", "model_type") == "mbart" ? true : false;
+    mbart_                    = reader.Get("encoder", "model_type") == "mbart" ? true : false;
     bart_with_bias_           = reader.GetBoolean("structure", "bart_with_bias", false);
     use_gated_activation_     = reader.GetBoolean("structure", "use_gated_activation", false);
     position_embedding_type_ =
@@ -116,7 +116,7 @@ BartTritonModel<T>::BartTritonModel(size_t      tensor_para_size,
     encoder_num_layer_              = reader.GetInteger("encoder", "encoder_layers");
     encoder_vocab_size_             = reader.GetInteger("encoder", "vocab_size");
     encoder_max_position_embeddings = reader.GetInteger("encoder", "max_position_embeddings");
-    mbart_                          = reader.GetBoolean("encoder", "model_type") == "mbart" ? true : false;
+    mbart_                          = reader.Get("encoder", "model_type") == "mbart" ? true : false;
 
     // decoding
     decoding_head_num_               = reader.GetInteger("decoder", "decoder_attention_heads");
@@ -291,22 +291,22 @@ void BartTritonModel<T>::createSharedWeights(int device_id, int rank)
                                                                                     use_gated_activation_,
                                                                                     position_embedding_type_);
 
-    decoding_shared_weights_[device_id] =
-        std::make_shared<ft::BartDecodingWeight<T>>(decoding_head_num_,
-                                                    decoding_size_per_head_,
-                                                    decoding_d_model_,
-                                                    decoding_inter_size_,
-                                                    decoding_vocab_size_,
-                                                    decoding_num_layer_,
-                                                    encoder_d_model_,
-                                                    decoding_num_bucket_or_max_pos_seq_len_,
-                                                    tensor_para_size_,
-                                                    tensor_para_rank,
-                                                    pipeline_para_size_,
-                                                    pipeline_para_rank,
-                                                    bart_with_bias_,
-                                                    mbart_ use_gated_activation_,
-                                                    position_embedding_type_);
+    decoding_shared_weights_[device_id] = std::make_shared<ft::BartDecodingWeight<T>>(decoding_head_num_,
+                                                                                      decoding_size_per_head_,
+                                                                                      decoding_d_model_,
+                                                                                      decoding_inter_size_,
+                                                                                      decoding_vocab_size_,
+                                                                                      decoding_num_layer_,
+                                                                                      encoder_d_model_,
+                                                                                      decoding_max_position_embeddings,
+                                                                                      tensor_para_size_,
+                                                                                      tensor_para_rank,
+                                                                                      pipeline_para_size_,
+                                                                                      pipeline_para_rank,
+                                                                                      bart_with_bias_,
+                                                                                      mbart_,
+                                                                                      use_gated_activation_,
+                                                                                      position_embedding_type_);
 
     encoder_shared_weights_[device_id]->loadModel(model_dir_);
     decoding_shared_weights_[device_id]->loadModel(model_dir_);
@@ -324,17 +324,15 @@ std::string BartTritonModel<T>::toString()
        << "\n    encoder_d_model_: " << encoder_d_model_ << "\n    encoder_inter_size_: " << encoder_inter_size_
        << "\n    encoder_num_layer_: " << encoder_num_layer_ << "\n    encoder_vocab_size_: " << encoder_vocab_size_
        << "\n    encoder_max_position_embeddings: " << encoder_max_position_embeddings
-       << "\n    encoder_adapter_: " << encoder_adapter_.toString()
        << "\n    decoding_head_num_: " << decoding_head_num_
        << "\n    decoding_size_per_head_: " << decoding_size_per_head_
        << "\n    decoding_d_model_: " << decoding_d_model_ << "\n    decoding_inter_size_: " << decoding_inter_size_
        << "\n    decoding_num_layer_: " << decoding_num_layer_ << "\n    decoding_vocab_size_: " << decoding_vocab_size_
-       << "\n    decoding_num_bucket_or_max_pos_seq_len_: " << decoding_num_bucket_or_max_pos_seq_len_
-       << "\n    decoding_adapter: " << decoding_adapter_.toString() << "\n    bart_with_bias_: " << bart_with_bias_
-       << "\n    use_gated_activation_: " << use_gated_activation_
-       << "\n   position_embedding_type_: " << position_embedding_type_string << "\n    start_id_: " << start_id_
-       << "\n    end_id_: " << end_id_ << "\n    model_name_: " << model_name_ << "\n    model_dir_: " << model_dir_
-       << std::endl;
+       << "\n    decoding_max_position_embeddings: " << decoding_max_position_embeddings
+       << "\n    bart_with_bias_: " << bart_with_bias_ << "\n    use_gated_activation_: " << use_gated_activation_
+       << "\n    mbart_: " << mbart_ << "\n   position_embedding_type_: " << position_embedding_type_string
+       << "\n    start_id_: " << start_id_ << "\n    end_id_: " << end_id_ << "\n    model_name_: " << model_name_
+       << "\n    model_dir_: " << model_dir_ << std::endl;
 
     return ss.str();
 }
