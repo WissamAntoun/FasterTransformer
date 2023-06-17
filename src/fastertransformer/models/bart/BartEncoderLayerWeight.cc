@@ -347,7 +347,7 @@ void BartEncoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
                              model_file_type);
         loadWeightFromBin<T>(weights_ptr_[12 + gated_activation_weight_offset],
                              {weights_size_[12]},
-                             dir_path + "self_attn_layer_norm.bias." + ".bin",
+                             dir_path + "self_attn_layer_norm.bias" + ".bin",
                              model_file_type);
         loadWeightFromBin<T>(weights_ptr_[13 + gated_activation_weight_offset],
                              {weights_size_[13]},
@@ -361,7 +361,7 @@ void BartEncoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
             loadWeightFromBin<T>(
                 weights_ptr_[16], {weights_size_[16]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
             loadWeightFromBin<T>(
-                weights_ptr_[17], {weights_size_[17]}, dir_path + "final_layer_norm.bias." + ".bin", model_file_type);
+                weights_ptr_[17], {weights_size_[17]}, dir_path + "final_layer_norm.bias" + ".bin", model_file_type);
         }
         else {
             loadWeightFromBin<T>(weights_ptr_[14 + gated_activation_weight_offset],
@@ -370,7 +370,7 @@ void BartEncoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
                                  model_file_type);
             loadWeightFromBin<T>(weights_ptr_[15 + gated_activation_weight_offset],
                                  {weights_size_[15]},
-                                 dir_path + "final_layer_norm.bias." + ".bin",
+                                 dir_path + "final_layer_norm.bias" + ".bin",
                                  model_file_type);
         }
     }

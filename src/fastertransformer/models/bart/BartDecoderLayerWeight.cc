@@ -342,7 +342,7 @@ void BartDecoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
                              model_file_type);
         loadWeightFromBin<T>(weights_ptr[14 + gated_activation_weight_offset],
                              {weights_size[14 + gated_activation_weight_offset]},
-                             dir_path + "self_attn_layer_norm.bias." + ".bin",
+                             dir_path + "self_attn_layer_norm.bias" + ".bin",
                              model_file_type);
 
         loadWeightFromBin<T>(weights_ptr[15 + gated_activation_weight_offset],
@@ -363,7 +363,7 @@ void BartDecoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
                              model_file_type);
         loadWeightFromBin<T>(weights_ptr[19 + gated_activation_weight_offset],
                              {weights_size[19 + gated_activation_weight_offset]},
-                             dir_path + "encoder_attn_layer_norm.bias." + ".bin",
+                             dir_path + "encoder_attn_layer_norm.bias" + ".bin",
                              model_file_type);
 
         loadWeightFromBin<T>(weights_ptr[20 + gated_activation_weight_offset],
