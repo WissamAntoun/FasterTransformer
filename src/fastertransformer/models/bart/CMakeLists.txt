@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,22 +15,25 @@
 cmake_minimum_required(VERSION 3.8)
 
 add_library(BartDecoder STATIC BartDecoder.cc BartDecoderLayerWeight.cc)
-set_property(TARGET BartDecoder PROPERTY POSITION_INDEPENDENT_CODE  ON)
-set_property(TARGET BartDecoder PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
+set_property(TARGET BartDecoder PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET BartDecoder PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 target_link_libraries(BartDecoder PUBLIC -lcudart cublasMMWrapper TensorParallelDecoderSelfAttentionLayer
-                    TensorParallelDecoderCrossAttentionLayer TensorParallelReluFfnLayer TensorParallelSiluFfnLayer
-                    layernorm_kernels add_residual_kernels nccl_utils memory_utils tensor)
+    TensorParallelDecoderCrossAttentionLayer TensorParallelReluFfnLayer TensorParallelSiluFfnLayer
+    layernorm_kernels add_residual_kernels nccl_utils memory_utils tensor)
 
 add_library(BartDecoding STATIC BartDecoding.cc BartDecodingWeight.cc)
-set_property(TARGET BartDecoding PROPERTY POSITION_INDEPENDENT_CODE  ON)
-set_property(TARGET BartDecoding PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
+set_property(TARGET BartDecoding PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET BartDecoding PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 target_link_libraries(BartDecoding PUBLIC -lcudart cublasMMWrapper BartDecoder bert_preprocess_kernels
-                                        decoding_kernels DynamicDecodeLayer BaseBeamSearchLayer 
-                                        beam_search_topk_kernels gpt_kernels tensor)
+    decoding_kernels DynamicDecodeLayer BaseBeamSearchLayer
+    beam_search_topk_kernels gpt_kernels tensor)
 
 add_library(BartEncoder STATIC BartEncoder.cc BartEncoderWeight.cc BartEncoderLayerWeight.cc)
-set_property(TARGET BartEncoder PROPERTY POSITION_INDEPENDENT_CODE  ON)
-set_property(TARGET BartEncoder PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
-target_link_libraries(BartEncoder PUBLIC -lcudart bert_preprocess_kernels cublasMMWrapper 
-                        TensorParallelUnfusedAttentionLayer FusedAttentionLayer TensorParallelReluFfnLayer
-                        TensorParallelGeluFfnLayer TensorParallelSiluFfnLayer layernorm_kernels add_residual_kernels nccl_utils tensor)
+set_property(TARGET BartEncoder PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET BartEncoder PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+target_link_libraries(BartEncoder PUBLIC -lcudart bert_preprocess_kernels cublasMMWrapper
+    TensorParallelUnfusedAttentionLayer FusedAttentionLayer TensorParallelReluFfnLayer
+    TensorParallelGeluFfnLayer TensorParallelSiluFfnLayer layernorm_kernels add_residual_kernels nccl_utils tensor)
+
+add_executable(bart_gemm bart_gemm.cc)
+target_link_libraries(bart_gemm PUBLIC -lcudart bart_gemm_func memory_utils cuda_utils logger)

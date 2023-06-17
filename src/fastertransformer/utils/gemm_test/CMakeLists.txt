@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -56,17 +56,21 @@ set_property(TARGET gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 add_library(encoder_gemm_func STATIC ${encoder_gemm_func_files})
 target_link_libraries(encoder_gemm_func PUBLIC -lcublas -lcublasLt -lcudart gemm_func cuda_utils logger)
-if (SPARSITY_SUPPORT)
-target_link_libraries(encoder_gemm_func PUBLIC -lcusparse -lcusparseLt)
+
+if(SPARSITY_SUPPORT)
+  target_link_libraries(encoder_gemm_func PUBLIC -lcusparse -lcusparseLt)
 endif()
+
 set_property(TARGET encoder_gemm_func PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET encoder_gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 add_library(encoder_igemm_func STATIC ${encoder_igemm_func_files})
 target_link_libraries(encoder_igemm_func PUBLIC -lcublas -lcublasLt -lcudart cuda_utils logger)
-if (SPARSITY_SUPPORT)
-target_link_libraries(encoder_igemm_func PUBLIC -lcusparse -lcusparseLt)
+
+if(SPARSITY_SUPPORT)
+  target_link_libraries(encoder_igemm_func PUBLIC -lcusparse -lcusparseLt)
 endif()
+
 set_property(TARGET encoder_igemm_func PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET encoder_igemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
@@ -75,11 +79,23 @@ target_link_libraries(decoding_gemm_func PUBLIC -lcublas -lcublasLt -lcudart gem
 set_property(TARGET decoding_gemm_func PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET decoding_gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
+add_library(bart_gemm_func STATIC ${bart_gemm_func_files})
+target_link_libraries(bart_gemm_func PUBLIC -lcublas -lcublasLt -lcudart gemm_func cuda_utils logger)
+
+if(SPARSITY_SUPPORT)
+  target_link_libraries(bart_gemm_func PUBLIC -lcusparse -lcusparseLt)
+endif()
+
+set_property(TARGET bart_gemm_func PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_property(TARGET bart_gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+
 add_library(gpt_gemm_func STATIC ${gpt_gemm_func_files})
 target_link_libraries(gpt_gemm_func PUBLIC -lcublas -lcublasLt -lcudart gemm_func cuda_utils logger)
-if (SPARSITY_SUPPORT)
+
+if(SPARSITY_SUPPORT)
   target_link_libraries(gpt_gemm_func PUBLIC -lcusparse -lcusparseLt)
 endif()
+
 set_property(TARGET gpt_gemm_func PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET gpt_gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
@@ -90,9 +106,11 @@ set_property(TARGET xlnet_gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
 add_library(t5_gemm_func STATIC ${t5_gemm_func_files})
 target_link_libraries(t5_gemm_func PUBLIC -lcublas -lcublasLt -lcudart gemm_func cuda_utils logger)
-if (SPARSITY_SUPPORT)
+
+if(SPARSITY_SUPPORT)
   target_link_libraries(t5_gemm_func PUBLIC -lcusparse -lcusparseLt)
 endif()
+
 set_property(TARGET t5_gemm_func PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET t5_gemm_func PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 
