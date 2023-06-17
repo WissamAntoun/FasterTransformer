@@ -182,6 +182,9 @@ public:
 
     void registerCallback(callback_sig* fn, void* ctx);
     void unRegisterCallback();
+
+    void setOutputTensors(TensorMap* output_tensors, const TensorMap* input_tensors);
+    void sendTensorsToFirstPipelineNode(TensorMap* output_tensors, const TensorMap* input_tensors);
 };
 
 }  // namespace fastertransformer
