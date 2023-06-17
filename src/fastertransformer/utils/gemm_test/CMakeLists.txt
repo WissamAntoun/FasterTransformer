@@ -29,6 +29,10 @@ set(decoding_gemm_func_files
   decoding_gemm_func.cc
 )
 
+set(bart_gemm_func_files
+  bart_gemm_func.cc
+)
+
 set(gpt_gemm_func_files
   gpt_gemm_func.cc
 )
