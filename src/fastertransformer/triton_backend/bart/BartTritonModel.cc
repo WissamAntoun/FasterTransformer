@@ -127,12 +127,9 @@ BartTritonModel<T>::BartTritonModel(size_t      tensor_para_size,
     decoding_vocab_size_             = reader.GetInteger("decoder", "vocab_size");
     decoding_max_position_embeddings = reader.GetInteger("decoder", "max_position_embeddings");
 
-    start_id_                 = reader.GetInteger("decoder", "decoder_start_token_id");
-    end_id_                   = reader.GetInteger("decoder", "eos_token_id");
-    tensor_para_size_         = reader.GetInteger("ft_instance_hyperparameter", "tensor_para_size");
-    pipeline_para_size_       = reader.GetInteger("ft_instance_hyperparameter", "pipeline_para_size");
-    enable_custom_all_reduce_ = reader.GetInteger("ft_instance_hyperparameter", "enable_custom_all_reduce", 0);
-    tie_word_embeddings_      = reader.GetBoolean("decoder", "tie_word_embeddings", true);
+    start_id_            = reader.GetInteger("decoder", "decoder_start_token_id");
+    end_id_              = reader.GetInteger("decoder", "eos_token_id");
+    tie_word_embeddings_ = reader.GetBoolean("decoder", "tie_word_embeddings", true);
 
     bart_with_bias_       = reader.GetBoolean("structure", "bart_with_bias", false);
     use_gated_activation_ = reader.GetBoolean("structure", "use_gated_activation", false);
