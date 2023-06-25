@@ -133,6 +133,7 @@ BartTritonModel<T>::BartTritonModel(size_t      tensor_para_size,
 
     bart_with_bias_       = reader.GetBoolean("structure", "bart_with_bias", false);
     use_gated_activation_ = reader.GetBoolean("structure", "use_gated_activation", false);
+    activation_type_      = ft::getActivationType(reader.Get("encoder", "activation_function"));
     position_embedding_type_ =
         ft::PositionEmbeddingType(reader.Get("structure", "position_embedding_type", "relative") == "relative" ? 0 : 1);
 
