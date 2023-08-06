@@ -79,7 +79,8 @@ BartTritonModel<T>::BartTritonModel(INIReader reader, std::string model_dir): mo
     use_gated_activation_     = reader.GetBoolean("structure", "use_gated_activation", false);
     position_embedding_type_ =
         ft::PositionEmbeddingType(reader.Get("structure", "position_embedding_type", "relative") == "relative" ? 0 : 1);
-    q_scaling_ = bart_with_bias_ ? 1.0f : (1.0f / (sqrt(encoder_size_per_head_) * 1.0f));
+    q_scaling_           = bart_with_bias_ ? 1.0f : (1.0f / (sqrt(encoder_size_per_head_) * 1.0f));
+    tie_word_embeddings_ = reader.GetBoolean("decoder", "tie_word_embeddings", true);
 
     max_distance_ = 128;  // use default value of huggingface here. Unused since we don't use relative position bias
 }
@@ -127,9 +128,8 @@ BartTritonModel<T>::BartTritonModel(size_t      tensor_para_size,
     decoding_vocab_size_             = reader.GetInteger("decoder", "vocab_size");
     decoding_max_position_embeddings = reader.GetInteger("decoder", "max_position_embeddings");
 
-    start_id_            = reader.GetInteger("decoder", "decoder_start_token_id");
-    end_id_              = reader.GetInteger("decoder", "eos_token_id");
-    tie_word_embeddings_ = reader.GetBoolean("decoder", "tie_word_embeddings", true);
+    start_id_ = reader.GetInteger("decoder", "decoder_start_token_id");
+    end_id_   = reader.GetInteger("decoder", "eos_token_id");
 
     bart_with_bias_       = reader.GetBoolean("structure", "bart_with_bias", false);
     use_gated_activation_ = reader.GetBoolean("structure", "use_gated_activation", false);
