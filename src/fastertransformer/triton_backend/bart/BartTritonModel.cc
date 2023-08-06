@@ -83,6 +83,9 @@ BartTritonModel<T>::BartTritonModel(INIReader reader, std::string model_dir): mo
     tie_word_embeddings_ = reader.GetBoolean("decoder", "tie_word_embeddings", true);
 
     max_distance_ = 128;  // use default value of huggingface here. Unused since we don't use relative position bias
+
+    // print model info
+    std::cout << toString() << std::endl;
 }
 
 template<typename T>
@@ -141,6 +144,9 @@ BartTritonModel<T>::BartTritonModel(size_t      tensor_para_size,
     tie_word_embeddings_ = reader.GetBoolean("decoder", "tie_word_embeddings", true);
 
     max_distance_ = 128;  // use default value of huggingface here. Unused since we don't use relative position bias
+
+    // print model info
+    std::cout << toString() << std::endl;
 }
 
 template<typename T>
