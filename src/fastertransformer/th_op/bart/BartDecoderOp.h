@@ -281,7 +281,7 @@ public:
                                  th::Tensor  inter_kernel2,          // [10] Layer: Gated activation weight (optional)
                                  th::Tensor  output_kernel,          // [11] Layer: FC2 weiht
                                  // below are bias of corresponding above
-                                 th::Tensor  self_layernorm_beta,     
+                                 th::Tensor  self_layernorm_beta,
                                  th::Tensor  self_bias_qkv,
                                  th::Tensor  self_output_bias,
                                  th::Tensor  cross_layernorm_beta,

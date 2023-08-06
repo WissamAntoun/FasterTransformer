@@ -336,6 +336,7 @@ std::string BartTritonModel<T>::toString()
        << "\n    decoding_max_position_embeddings: " << decoding_max_position_embeddings
        << "\n    bart_with_bias_: " << bart_with_bias_ << "\n    use_gated_activation_: " << use_gated_activation_
        << "\n    mbart_: " << mbart_ << "\n   position_embedding_type_: " << position_embedding_type_string
+       << "\n    q_scaling_: " << q_scaling_ << "\n    tie_word_embeddings_: " << tie_word_embeddings_
        << "\n    start_id_: " << start_id_ << "\n    end_id_: " << end_id_ << "\n    model_name_: " << model_name_
        << "\n    model_dir_: " << model_dir_ << std::endl;
 

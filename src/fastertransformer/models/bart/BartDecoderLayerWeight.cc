@@ -312,73 +312,104 @@ void BartDecoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
     loadWeightFromBin<T>(
         weights_ptr[9], {weights_size[9]}, dir_path + "fc1.weight." + tp_rank + ".bin", model_file_type);
 
-    const int gated_activation_weight_offset = use_gated_activation_ ? 1 : 0;
-
     if (use_gated_activation_) {  // won't used in BART afaik
 
         loadWeightFromBin<T>(
             weights_ptr[10], {weights_size[10]}, dir_path + "gated_act.weight." + tp_rank + ".bin", model_file_type);
+        loadWeightFromBin<T>(
+            weights_ptr[11], {weights_size[11]}, dir_path + "fc2.weight." + tp_rank + ".bin", model_file_type);
     }
-
-    loadWeightFromBin<T>(weights_ptr[10 + gated_activation_weight_offset],
-                         {weights_size[10 + gated_activation_weight_offset]},
-                         dir_path + "fc2.weight." + tp_rank + ".bin",
-                         model_file_type);
-
+    else {
+        loadWeightFromBin<T>(
+            weights_ptr[10], {weights_size[10]}, dir_path + "fc2.weight." + tp_rank + ".bin", model_file_type);
+    }
     if (bart_with_bias_) {
-
-        loadWeightFromBin<T>(weights_ptr[11 + gated_activation_weight_offset],
-                             {weights_size[11 + gated_activation_weight_offset]},
-                             dir_path + "final_layer_norm.bias.bin",
-                             model_file_type);
-
-        loadWeightFromBin<T>(weights_ptr[12 + gated_activation_weight_offset],
-                             {weights_size[12 + gated_activation_weight_offset]},
-                             dir_path + "self_attn.qkv_proj.bias." + tp_rank + ".bin",
-                             model_file_type);
-        loadWeightFromBin<T>(weights_ptr[13 + gated_activation_weight_offset],
-                             {weights_size[13 + gated_activation_weight_offset]},
-                             dir_path + "self_attn.out_proj.bias." + tp_rank + ".bin",
-                             model_file_type);
-        loadWeightFromBin<T>(weights_ptr[14 + gated_activation_weight_offset],
-                             {weights_size[14 + gated_activation_weight_offset]},
-                             dir_path + "self_attn_layer_norm.bias" + ".bin",
-                             model_file_type);
-
-        loadWeightFromBin<T>(weights_ptr[15 + gated_activation_weight_offset],
-                             {weights_size[15 + gated_activation_weight_offset]},
-                             dir_path + "encoder_attn.q_proj.bias." + tp_rank + ".bin",
-                             model_file_type);
-        loadWeightFromBin<T>(weights_ptr[16 + gated_activation_weight_offset],
-                             {weights_size[16 + gated_activation_weight_offset]},
-                             dir_path + "encoder_attn.k_proj.bias." + tp_rank + ".bin",
-                             model_file_type);
-        loadWeightFromBin<T>(weights_ptr[17 + gated_activation_weight_offset],
-                             {weights_size[17 + gated_activation_weight_offset]},
-                             dir_path + "encoder_attn.v_proj.bias." + tp_rank + ".bin",
-                             model_file_type);
-        loadWeightFromBin<T>(weights_ptr[18 + gated_activation_weight_offset],
-                             {weights_size[18 + gated_activation_weight_offset]},
-                             dir_path + "encoder_attn.out_proj.bias." + tp_rank + ".bin",
-                             model_file_type);
-        loadWeightFromBin<T>(weights_ptr[19 + gated_activation_weight_offset],
-                             {weights_size[19 + gated_activation_weight_offset]},
-                             dir_path + "encoder_attn_layer_norm.bias" + ".bin",
-                             model_file_type);
-
-        loadWeightFromBin<T>(weights_ptr[20 + gated_activation_weight_offset],
-                             {weights_size[20 + gated_activation_weight_offset]},
-                             dir_path + "fc1.bias." + tp_rank + ".bin",
-                             model_file_type);
         if (use_gated_activation_) {
+
             loadWeightFromBin<T>(
-                weights_ptr[22], {weights_size[22]}, dir_path + "gated_act.bias." + tp_rank + ".bin", model_file_type);
+                weights_ptr[12], {weights_size[12]}, dir_path + "final_layer_norm.bias.bin", model_file_type);
+
+            loadWeightFromBin<T>(weights_ptr[13],
+                                 {weights_size[13]},
+                                 dir_path + "self_attn.qkv_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[14],
+                                 {weights_size[14]},
+                                 dir_path + "self_attn.out_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
             loadWeightFromBin<T>(
-                weights_ptr[23], {weights_size[23]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
+                weights_ptr[15], {weights_size[15]}, dir_path + "self_attn_layer_norm.bias" + ".bin", model_file_type);
+
+            loadWeightFromBin<T>(weights_ptr[16],
+                                 {weights_size[16]},
+                                 dir_path + "encoder_attn.q_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[17],
+                                 {weights_size[17]},
+                                 dir_path + "encoder_attn.k_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[18],
+                                 {weights_size[18]},
+                                 dir_path + "encoder_attn.v_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[19],
+                                 {weights_size[19]},
+                                 dir_path + "encoder_attn.out_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[20],
+                                 {weights_size[20]},
+                                 dir_path + "encoder_attn_layer_norm.bias" + ".bin",
+                                 model_file_type);
+
+            loadWeightFromBin<T>(
+                weights_ptr[21], {weights_size[21]}, dir_path + "fc1.bias." + tp_rank + ".bin", model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr[22], {weights_size[22]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr[23], {weights_size[23]}, dir_path + "gated_act.bias." + tp_rank + ".bin", model_file_type);
         }
         else {
+
             loadWeightFromBin<T>(
-                weights_ptr[21], {weights_size[21]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
+                weights_ptr[11], {weights_size[11]}, dir_path + "final_layer_norm.bias.bin", model_file_type);
+
+            loadWeightFromBin<T>(weights_ptr[12],
+                                 {weights_size[12]},
+                                 dir_path + "self_attn.qkv_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[13],
+                                 {weights_size[13]},
+                                 dir_path + "self_attn.out_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(
+                weights_ptr[14], {weights_size[14]}, dir_path + "self_attn_layer_norm.bias" + ".bin", model_file_type);
+
+            loadWeightFromBin<T>(weights_ptr[15],
+                                 {weights_size[15]},
+                                 dir_path + "encoder_attn.q_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[16],
+                                 {weights_size[16]},
+                                 dir_path + "encoder_attn.k_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[17],
+                                 {weights_size[17]},
+                                 dir_path + "encoder_attn.v_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[18],
+                                 {weights_size[18]},
+                                 dir_path + "encoder_attn.out_proj.bias." + tp_rank + ".bin",
+                                 model_file_type);
+            loadWeightFromBin<T>(weights_ptr[19],
+                                 {weights_size[19]},
+                                 dir_path + "encoder_attn_layer_norm.bias" + ".bin",
+                                 model_file_type);
+
+            loadWeightFromBin<T>(
+                weights_ptr[20], {weights_size[20]}, dir_path + "fc1.bias." + tp_rank + ".bin", model_file_type);
+
+            loadWeightFromBin<T>(
+                weights_ptr[21], {weights_size[21]}, dir_path + "gated_act.bias." + tp_rank + ".bin", model_file_type);
         }
 
         FT_LOG_DEBUG("BartDecoderLayerWeight " + std::string(__func__) + " end");
