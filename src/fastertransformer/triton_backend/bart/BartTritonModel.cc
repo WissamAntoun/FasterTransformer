@@ -191,34 +191,35 @@ BartTritonModel<T>::createModelInstance(int                                     
     // TODO(bhsueh) not support fused mha
     // NOTE: fmha doesn't support t5-style relative position bias
     ft::AttentionType attention_type =
-        ft::getAttentionType<T>(encoder_size_per_head_, sm_, true, encoder_max_position_embeddings, false);
+        ft::getAttentionType<T>(encoder_size_per_head_, sm_, false, encoder_max_position_embeddings, false);
 
     ft::NcclParam tensor_para_   = nccl_params.first[comms_rank];
     ft::NcclParam pipeline_para_ = nccl_params.second[comms_rank];
 
-    auto encoder = std::make_unique<ft::BartEncoder<T>>(ft::BartEncoder<T>(0,
-                                                                           0,
-                                                                           encoder_head_num_,
-                                                                           encoder_size_per_head_,
-                                                                           encoder_inter_size_,
-                                                                           encoder_d_model_,
-                                                                           encoder_num_layer_,
-                                                                           encoder_max_position_embeddings,
-                                                                           max_distance_,
-                                                                           sm_,
-                                                                           q_scaling_,
-                                                                           stream,
-                                                                           cublas_wrapper.get(),
-                                                                           allocator.get(),
-                                                                           false,
-                                                                           attention_type,
-                                                                           false,
-                                                                           activation_type_,
-                                                                           ft::LayerNormType::pre_layernorm,
-                                                                           tensor_para_,
-                                                                           pipeline_para_,
-                                                                           custom_all_reduce_comm,
-                                                                           enable_custom_all_reduce_));
+    auto encoder = std::make_unique<ft::BartEncoder<T>>(
+        ft::BartEncoder<T>(0,                                 // max_batch_size
+                           0,                                 // max_seq_len
+                           encoder_head_num_,                 // head_num
+                           encoder_size_per_head_,            // size_per_head
+                           encoder_inter_size_,               // inter_size
+                           encoder_d_model_,                  // d_model
+                           encoder_num_layer_,                // num_layer
+                           encoder_max_position_embeddings,   // num_bucket_or_max_seq_len
+                           max_distance_,                     // max_distance
+                           sm_,                               // sm
+                           q_scaling_,                        // q_scaling
+                           stream,                            // stream
+                           cublas_wrapper.get(),              // cublas_wrapper
+                           allocator.get(),                   // allocator
+                           false,                             // is_free_buffer_after_forward
+                           attention_type,                    // attention_type
+                           false,                             // sparse
+                           activation_type_,                  // activation_type
+                           ft::LayerNormType::pre_layernorm,  // layernorm_type
+                           tensor_para_,                      // tensor_para
+                           pipeline_para_,                    // pipeline_para
+                           custom_all_reduce_comm,            // custom_all_reduce_comm
+                           enable_custom_all_reduce_));       // enable_custom_all_reduce
 
     auto decoding = std::make_unique<ft::BartDecoding<T>>(ft::BartDecoding<T>(0,
                                                                               0,
