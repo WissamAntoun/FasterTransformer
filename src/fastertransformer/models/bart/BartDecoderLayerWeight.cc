@@ -364,9 +364,9 @@ void BartDecoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
             loadWeightFromBin<T>(
                 weights_ptr[21], {weights_size[21]}, dir_path + "fc1.bias." + tp_rank + ".bin", model_file_type);
             loadWeightFromBin<T>(
-                weights_ptr[22], {weights_size[22]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
+                weights_ptr[22], {weights_size[22]}, dir_path + "gated_act.bias." + tp_rank + ".bin", model_file_type);
             loadWeightFromBin<T>(
-                weights_ptr[23], {weights_size[23]}, dir_path + "gated_act.bias." + tp_rank + ".bin", model_file_type);
+                weights_ptr[23], {weights_size[23]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
         }
         else {
 
@@ -409,7 +409,7 @@ void BartDecoderLayerWeight<T>::loadModel(std::string dir_path, FtCudaDataType m
                 weights_ptr[20], {weights_size[20]}, dir_path + "fc1.bias." + tp_rank + ".bin", model_file_type);
 
             loadWeightFromBin<T>(
-                weights_ptr[21], {weights_size[21]}, dir_path + "gated_act.bias." + tp_rank + ".bin", model_file_type);
+                weights_ptr[21], {weights_size[21]}, dir_path + "fc2.bias." + tp_rank + ".bin", model_file_type);
         }
 
         FT_LOG_DEBUG("BartDecoderLayerWeight " + std::string(__func__) + " end");
