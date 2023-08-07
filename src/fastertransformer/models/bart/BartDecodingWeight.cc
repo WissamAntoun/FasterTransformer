@@ -270,7 +270,7 @@ void BartDecodingWeight<T>::loadModel(std::string dir_path)
         FT_CHECK(false);
     }
     loadWeightFromBin<T>(weights_ptr[1], {(size_t)weights_size[1]}, dir_path + "/shared.weight_T.bin", model_file_type);
-    loadWeightFromBin<T>(weights_ptr[2], {(size_t)weights_size[2]}, dir_path + "/shared.weight.bin", model_file_type);
+    loadWeightFromBin<T>(weights_ptr[2], {(size_t)weights_size[2]}, dir_path + "/shared.weight_T.bin", model_file_type);
     loadWeightFromBin<T>(weights_ptr[3],
                          {(size_t)weights_size[3]},
                          dir_path + "/decoder.layernorm_embedding.weight.bin",
@@ -293,7 +293,7 @@ void BartDecodingWeight<T>::loadModel(std::string dir_path)
             loadWeightFromBin<T>(
                 weights_ptr[6], {(size_t)weights_size[6]}, dir_path + "/decoder.layer_norm.bias.bin", model_file_type);
             loadWeightFromBin<T>(
-                weights_ptr[7], {(size_t)weights_size[7]}, dir_path + "/final_logits_bias.bin", model_file_type);
+                weights_ptr[7], {(size_t)weights_size[7]}, dir_path + "/final_logits_bias_T.bin", model_file_type);
         }
         else if (mbart && !bart_with_bias) {
             // post_decoder_layernorm.gamma = weights_ptr[4];
