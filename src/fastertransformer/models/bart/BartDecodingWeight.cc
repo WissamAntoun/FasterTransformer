@@ -261,7 +261,7 @@ void BartDecodingWeight<T>::loadModel(std::string dir_path)
     if (position_embedding_type == PositionEmbeddingType::absolute) {
         loadWeightFromBin<T>(weights_ptr[0],
                              {(size_t)weights_size[0]},
-                             dir_path + "/decoder.embed_positions.weight.bin",
+                             dir_path + "/decoder.embed_positions.weight_T.bin",
                              model_file_type);
     }
     else {
